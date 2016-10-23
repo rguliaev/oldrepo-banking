@@ -1,0 +1,1 @@
+Simple Akka-Persistance Banking Application
