@@ -1,7 +1,7 @@
 package com.example
+
 import org.scalatest._
 import spray.json._
-import DefaultJsonProtocol._
 
 class JsonSerializationSpec extends FlatSpec with Matchers with JsonSupport {
 
