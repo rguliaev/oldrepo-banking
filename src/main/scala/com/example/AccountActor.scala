@@ -6,16 +6,13 @@ import scala.concurrent.duration._
 
 class AccountActor(userId: String) extends PersistentActor with ActorLogging {
   import AccountActor._
-  context.setReceiveTimeout(2.minutes)
+  context.setReceiveTimeout(3.minutes)
 
   private var balance: Balance = Balance(0)
 
   override def persistenceId: String = userId + "-" + self.path.name
   override def receiveRecover = {
     case RefreshBalance(amount,add) => if(add) deposit(amount) else withDraw(amount)
-    case Transfer(amount,to) =>
-      withDraw(amount)
-      to ! Deposit(amount)
   }
 
   private def deposit(amount: BigDecimal) = {
@@ -23,7 +20,7 @@ class AccountActor(userId: String) extends PersistentActor with ActorLogging {
     log.info(s"Deposit $amount | Balance = s${balance.amount}")
   }
 
-  private def withDraw(amount: BigDecimal): Boolean = {
+  private def withDraw(amount: BigDecimal) = {
     val check = balance.amount - amount >= 0
     if(check){
       balance = balance.copy(amount = balance.amount - amount)
@@ -31,7 +28,6 @@ class AccountActor(userId: String) extends PersistentActor with ActorLogging {
     } else {
       log.info(s"Account overdrawn")
     }
-    check
   }
 
   override def receiveCommand = {
@@ -44,10 +40,10 @@ class AccountActor(userId: String) extends PersistentActor with ActorLogging {
       persist(RefreshBalance(amount,false)){ p =>
         withDraw(amount)
       }
-    case msg @ Transfer(amount,to) =>
-      persist(msg) { p =>
-        withDraw(amount)
+    case Transfer(amount,to) =>
+      persist(RefreshBalance(amount,false)) { p =>
         to ! Deposit(amount)
+        withDraw(amount)
       }
     case ResetBalance =>
       persist(RefreshBalance(-balance.amount,true)){ p =>
@@ -59,12 +55,12 @@ class AccountActor(userId: String) extends PersistentActor with ActorLogging {
 object AccountActor {
   def props(userId: String): Props = Props(new AccountActor(userId))
 
-  sealed trait AccountActions
-  case object GetBalance extends AccountActions
-  case class WithDraw(amount: BigDecimal) extends AccountActions
-  case class Deposit(amount: BigDecimal) extends AccountActions
-  case class Balance(amount: BigDecimal) extends AccountActions
-  case class Transfer(amount: BigDecimal, to: ActorRef) extends AccountActions
-  case class RefreshBalance(amount: BigDecimal, add: Boolean) extends AccountActions
-  case object ResetBalance extends AccountActions
+  sealed trait AccountEvents
+  case object GetBalance extends AccountEvents
+  case class WithDraw(amount: BigDecimal) extends AccountEvents
+  case class Deposit(amount: BigDecimal) extends AccountEvents
+  case class Balance(amount: BigDecimal) extends AccountEvents
+  case class Transfer(amount: BigDecimal, to: ActorRef) extends AccountEvents
+  case class RefreshBalance(amount: BigDecimal, add: Boolean) extends AccountEvents
+  case object ResetBalance extends AccountEvents
 }
